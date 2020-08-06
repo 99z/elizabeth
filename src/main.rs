@@ -34,7 +34,7 @@ struct Page {
     content: String
 }
 
-fn get_page(page_id: i32) -> Result<String, Box<dyn std::error::Error>> {
+fn get_table_node(page_id: i32) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
     let page_endpoint = format!("https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}", page_id);
     let body: Page = reqwest::blocking::get(&page_endpoint)?.json()?;
 
@@ -53,16 +53,24 @@ fn get_page(page_id: i32) -> Result<String, Box<dyn std::error::Error>> {
         return Err(PageParseError.into());
     };
 
-    let mut weaknesses_resistances: HashMap<String, String> = HashMap::new();
+    let mut weaknesses_resistances: HashMap<String, Vec<String>> = HashMap::new();
     for (idx, kind) in table_node.find(Name("th")).enumerate() {
         // TODO use if let syntax here instead of unwrap
         let res = table_node.find(Name("td")).nth(idx).unwrap();
-        println!("{} -> {}", kind.text(), res.text());
+        let resistance = if res.text().trim() == "-" {
+            "Neutral".to_string()
+        } else {
+            res.text().trim().to_string()
+        };
+
+        if weaknesses_resistances.get(&resistance).is_none() {
+            weaknesses_resistances.insert(resistance.clone(), vec![] );
+        }
+
+        weaknesses_resistances.get_mut(&resistance).unwrap().push(kind.text().trim().to_string());
     }
 
-    // println!("{}", node);
-
-    Ok(body.content)
+    Ok(weaknesses_resistances)
 }
 
 fn get_page_id(persona: String, shadow: String) -> Result<i32, Box<dyn std::error::Error>> {
@@ -96,17 +104,23 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let persona = matches.opt_str("p").unwrap();
     let shadow = matches.opt_str("s").unwrap();
 
-    let res = match get_page_id(persona, shadow) {
+    let page_id = match get_page_id(persona, shadow) {
         Ok(id) => { id },
         Err(e) => panic!(e.to_string())
     };
 
-    if res == -1 {
+    if page_id == -1 {
         eprintln!("Shadow not found.");
         return Err(PageParseError.into());
     }
 
-    let res = get_page(res)?;
+    let table_node = match get_table_node(page_id) {
+        Ok(r) => { r },
+        Err(e) => { panic!(e.to_string()) }
+    };
+
+    println!("{:#?}", table_node);
+
     Ok(())
 
     // println!("{}", res);
