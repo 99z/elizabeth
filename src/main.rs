@@ -34,25 +34,7 @@ struct Page {
     content: String
 }
 
-fn get_table_node(page_id: i32) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let page_endpoint = format!("https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}", page_id);
-    let body: Page = reqwest::blocking::get(&page_endpoint)?.json()?;
-
-    let document = Document::from(body.content.as_str());
-    let table_node = document.find(Attr("id", "Persona_3_2"))
-        .next()
-        .and_then(|n| n.parent())
-        .and_then(|n| n.find(Class("tabbertab")).next())
-        .and_then(|n| n.find(Name("table")).take(1).next())
-        .and_then(|n| n.find(Name("table")).take(1).next())
-        .and_then(|n| n.find(Name("table")).nth(2));
-
-    let table_node = if let Some(table_node) = table_node {
-        table_node
-    } else {
-        return Err(PageParseError.into());
-    };
-
+fn extract_table_data(table_node: select::document::Document) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
     let mut weaknesses_resistances: HashMap<String, Vec<String>> = HashMap::new();
     for (idx, kind) in table_node.find(Name("th")).enumerate() {
         // TODO use if let syntax here instead of unwrap
@@ -71,6 +53,28 @@ fn get_table_node(page_id: i32) -> Result<HashMap<String, Vec<String>>, Box<dyn 
     }
 
     Ok(weaknesses_resistances)
+}
+
+fn get_table_node(page_id: i32) -> Result<select::document::Document, Box<dyn std::error::Error>> {
+    let page_endpoint = format!("https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}", page_id);
+    let body: Page = reqwest::blocking::get(&page_endpoint)?.json()?;
+
+    let document = Document::from(body.content.as_str());
+    let table_node = document.find(Attr("id", "Persona_3_2"))
+        .next()
+        .and_then(|n| n.parent())
+        .and_then(|n| n.find(Class("tabbertab")).next())
+        .and_then(|n| n.find(Name("table")).take(1).next())
+        .and_then(|n| n.find(Name("table")).take(1).next())
+        .and_then(|n| n.find(Name("table")).nth(2));
+
+    let table_node = if let Some(table_node) = table_node {
+        table_node
+    } else {
+        return Err(PageParseError.into());
+    };
+
+    Ok(Document::from(table_node.html().as_str()))
 }
 
 fn get_page_id(persona: String, shadow: String) -> Result<i32, Box<dyn std::error::Error>> {
@@ -119,7 +123,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
         Err(e) => { panic!(e.to_string()) }
     };
 
-    println!("{:#?}", table_node);
+    let table_data = match extract_table_data(table_node) {
+        Ok(t) => { t },
+        Err(e) => { panic!(e.to_string()) }
+    };
+
+    println!("{:#?}", table_data);
 
     Ok(())
 
