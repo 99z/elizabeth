@@ -3,10 +3,10 @@ use std::collections::HashMap;
 use serde::{Deserialize};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use titlecase::titlecase;
-use std::process::exit;
-use select::document::Document;
-use select::predicate::{Predicate, Attr, Class, Name};
 use core::fmt;
+use scraper::{Selector, Html};
+use std::error::Error;
+use colored::*;
 
 #[derive(Debug, Clone)]
 struct PageParseError;
@@ -34,55 +34,73 @@ struct Page {
     content: String
 }
 
-fn extract_table_data(table_node: select::document::Document) -> Result<HashMap<String, Vec<String>>, Box<dyn std::error::Error>> {
-    let mut weaknesses_resistances: HashMap<String, Vec<String>> = HashMap::new();
-    for (idx, kind) in table_node.find(Name("th")).enumerate() {
-        // TODO use if let syntax here instead of unwrap
-        let res = table_node.find(Name("td")).nth(idx).unwrap();
-        let resistance = if res.text().trim() == "-" {
-            "Neutral".to_string()
-        } else {
-            res.text().trim().to_string()
-        };
+const P3_SELECTOR: &str = "#Persona_3_2";
+const P4_SELECTOR: &str = "#Persona_4_2";
 
-        if weaknesses_resistances.get(&resistance).is_none() {
-            weaknesses_resistances.insert(resistance.clone(), vec![] );
-        }
-
-        weaknesses_resistances.get_mut(&resistance).unwrap().push(kind.text().trim().to_string());
-    }
-
-    Ok(weaknesses_resistances)
+fn gen_table_selector(index: &usize) -> Selector {
+    let sel_string = format!("div:nth-child({}) > table > tbody > tr > td > table:nth-child(1) > tbody > tr > td > table:nth-child(2)", index);
+    Selector::parse(sel_string.as_str()).unwrap()
 }
 
-fn get_table_node(page_id: i32) -> Result<select::document::Document, Box<dyn std::error::Error>> {
+fn get_page(page_id: &i32) -> Result<Html, Box<dyn Error>> {
     let page_endpoint = format!("https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}", page_id);
     let body: Page = reqwest::blocking::get(&page_endpoint)?.json()?;
+    // println!("{}", body.content);
 
-    let document = Document::from(body.content.as_str());
-    let table_node = document.find(Attr("id", "Persona_3_2"))
-        .next()
-        .and_then(|n| n.parent())
-        .and_then(|n| n.find(Class("tabbertab")).next())
-        .and_then(|n| n.find(Name("table")).take(1).next())
-        .and_then(|n| n.find(Name("table")).take(1).next())
-        .and_then(|n| n.find(Name("table")).nth(2));
-
-    let table_node = if let Some(table_node) = table_node {
-        table_node
-    } else {
-        return Err(PageParseError.into());
-    };
-
-    Ok(Document::from(table_node.html().as_str()))
+    let document = Html::parse_fragment(body.content.as_str());
+    Ok(document)
 }
 
-fn get_page_id(persona: String, shadow: String) -> Result<i32, Box<dyn std::error::Error>> {
+fn get_table_node(doc: &Html) -> Result<Html, Box<dyn Error>> {
+    let tabs = Selector::parse(".tabbertab").unwrap();
+    let tab_idx = doc.select(&tabs).position(|t| t.value().attr("title").unwrap() == "Normal Encounter").unwrap();
+    let tab_selector = gen_table_selector(&tab_idx);
+    let table_node = doc.select(&tab_selector);
+
+    let resistance_table = Html::parse_fragment(table_node.map(|n| n.html()).collect::<String>().as_str());
+    Ok(resistance_table)
+}
+
+fn get_game_section(page: &Html) -> Result<Html, Box<dyn Error>> {
+    let selector = Selector::parse(format!("{} + .tabber", P3_SELECTOR).as_str()).unwrap();
+    let subsection_sel = page.select(&selector);
+    let subsection = Html::parse_fragment(subsection_sel.map(|n| n.html()).collect::<String>().as_str());
+
+    Ok(subsection)
+}
+
+fn extract_table_data(table_doc: Html) -> Result<HashMap<String, Vec<String>>, Box<dyn Error>> {
+    let types = Selector::parse("tbody > tr:nth-child(1) > th").unwrap();
+    let types_table: Vec<String> = table_doc.select(&types).map(|t| t.inner_html()).collect();
+    let resistances = Selector::parse("tbody > tr:nth-child(2) > td").unwrap();
+    let mut resistance_info: HashMap<String, Vec<String>> = HashMap::new();
+
+    for (idx, element) in table_doc.select(&resistances).enumerate() {
+        let res = if element.inner_html().trim() == "-" {
+            "Neutral".to_string()
+        } else {
+            element.inner_html().trim().to_string()
+        };
+
+        if resistance_info.get(&res).is_none() {
+            resistance_info.insert(res.clone(), vec![]);
+        }
+
+        resistance_info.get_mut(&res).unwrap().push(types_table[idx].trim().to_string());
+    }
+
+    Ok(resistance_info)
+}
+
+fn get_page_id(persona: &String, shadow: &String) -> Result<i32, Box<dyn Error>> {
     // https://megamitensei.fandom.com/api/v1#!/Articles
     // https://megamitensei.fandom.com/api.php?format=json&action=query&redirect=1&titles=Intrepid_Knight
     // https://megamitensei.fandom.com/api/v1/Articles/AsJson?id=
 
-    let page_id_endpoint = format!("https://megamitensei.fandom.com/api.php?format=json&action=query&redirect=1&titles={}&indexpageids", titlecase(shadow.as_str()));
+    let page_id_endpoint = format!(
+        "https://megamitensei.fandom.com/api.php?format=json&action=query&redirect=1&titles={}&indexpageids",
+        titlecase(shadow.as_str())
+    );
     const FRAGMENT: &AsciiSet = &CONTROLS.add(b' ').add(b'"').add(b'<').add(b'>').add(b'`');
 
     let page_meta_encoded = utf8_percent_encode(page_id_endpoint.as_str(), FRAGMENT);
@@ -94,7 +112,43 @@ fn get_page_id(persona: String, shadow: String) -> Result<i32, Box<dyn std::erro
     Ok(body.query.pageids[0].parse::<i32>().unwrap())
 }
 
-fn main() -> Result<(), Box<dyn std::error::Error>>{
+fn print_resistances(table: &HashMap<String, Vec<String>>) {
+    for (resistance, kinds) in table.iter() {
+        match resistance.as_str() {
+            "Strong" => {
+                print!("{}", "STRONG: ".blue());
+                for k in kinds {
+                    print!("{} ", k);
+                }
+                println!();
+            },
+            "Weak" => {
+                print!("{}", "WEAK: ".red());
+                for k in kinds {
+                    print!("{} ", k);
+                }
+                println!();
+            },
+            "Null" => {
+                print!("{}", "NULL: ".green());
+                for k in kinds {
+                    print!("{} ", k);
+                }
+                println!();
+            },
+            "Neutral" => {
+                print!("{}", "NEUTRAL: ".black());
+                for k in kinds {
+                    print!("{} ", k);
+                }
+                println!();
+            },
+            _ => { println!("") }
+        }
+    }
+}
+
+fn main() -> Result<(), Box<dyn Error>>{
     let args: Vec<String> = args().collect();
     let mut opts = getopts::Options::new();
     opts.reqopt("s", "shadow", "Name of shadow", "SHADOW")
@@ -108,7 +162,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
     let persona = matches.opt_str("p").unwrap();
     let shadow = matches.opt_str("s").unwrap();
 
-    let page_id = match get_page_id(persona, shadow) {
+    let page_id = match get_page_id(&persona, &shadow) {
         Ok(id) => { id },
         Err(e) => panic!(e.to_string())
     };
@@ -118,8 +172,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
         return Err(PageParseError.into());
     }
 
-    let table_node = match get_table_node(page_id) {
-        Ok(r) => { r },
+    let page = match get_page(&page_id) {
+        Ok(p) => { p },
+        Err(e) => { panic!(e.to_string()) }
+    };
+
+    let subsection = match get_game_section(&page) {
+        Ok(s) => { s },
+        Err(e) => { panic!(e.to_string()) }
+    };
+
+    let table_node = match get_table_node(&subsection) {
+        Ok(t) => { t },
         Err(e) => { panic!(e.to_string()) }
     };
 
@@ -128,9 +192,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>>{
         Err(e) => { panic!(e.to_string()) }
     };
 
-    println!("{:#?}", table_data);
+    print_resistances(&table_data);
 
     Ok(())
-
-    // println!("{}", res);
 }
