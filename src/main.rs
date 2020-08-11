@@ -57,12 +57,19 @@ const P3_SELECTOR: &str = "#Persona_3_2";
 const P4_SELECTOR: &str = "#Persona_4_2";
 
 fn gen_table_selector(index: &usize) -> Selector {
-    let sel_string = format!("div:nth-child({}) > table > tbody > tr > td > table:nth-child(1) > tbody > tr > td > table:nth-child(2)", index + 1);
+    let sel_string = format!(
+        "div:nth-child({}) > table > tbody > tr > td > table:nth-child(1) >
+        tbody > tr > td > table:nth-child(2)",
+        index + 1
+    );
     Selector::parse(sel_string.as_str()).unwrap()
 }
 
 fn get_page(page_id: &i32) -> Result<Html, Box<dyn Error>> {
-    let page_endpoint = format!("https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}", page_id);
+    let page_endpoint = format!(
+        "https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}",
+        page_id
+    );
     let body: Page = reqwest::blocking::get(&page_endpoint)?.json()?;
     // println!("{}", body.content);
 
@@ -72,13 +79,35 @@ fn get_page(page_id: &i32) -> Result<Html, Box<dyn Error>> {
 
 fn get_table_node(doc: &Html, variant: &String) -> Result<Html, Box<dyn Error>> {
     let tabs = Selector::parse(".tabbertab").unwrap();
-    let tab_selector = match doc.select(&tabs).position(|t| t.value().attr("title").unwrap() == variant) {
+    let tab_selector = match doc
+        .select(&tabs)
+        .position(|t| t.value().attr("title")
+        .unwrap() == variant
+    ) {
         Some(idx) => gen_table_selector(&idx),
-        None => Selector::parse("table > tbody > tr > td > table:nth-child(1) > tbody > tr > td > table:nth-child(2)").unwrap()
+        None => {
+            if variant == "The Journey" {
+                match doc
+                    .select(&tabs)
+                    .position(|t| t.value().attr("title")
+                    .unwrap() == "Normal Encounter"
+                ) {
+                    Some(idx) => gen_table_selector(&idx),
+                    None => Selector::parse("table > tbody > tr > td >
+                        table:nth-child(1) > tbody > tr > td > table:nth-child(2)")
+                        .unwrap()
+                };
+            }
+
+            Selector::parse("table > tbody > tr > td > table:nth-child(1) >
+                tbody > tr > td > table:nth-child(2)"
+            ).unwrap()
+        }
     };
     let table_node = doc.select(&tab_selector);
 
-    let resistance_table = Html::parse_fragment(table_node.map(|n| n.html()).collect::<String>().as_str());
+    let resistance_table = Html::parse_fragment(table_node.map(|n| n.html())
+        .collect::<String>().as_str());
     Ok(resistance_table)
 }
 
@@ -89,7 +118,9 @@ fn get_game_section(page: &Html, game: Games) -> Result<Html, Box<dyn Error>> {
         P4_SELECTOR
     };
 
-    let base_selector = Selector::parse(format!("{} + .tabber", persona_selector).as_str()).unwrap();
+    let base_selector = Selector::parse(
+        format!("{} + .tabber", persona_selector).as_str()
+    ).unwrap();
     let mut subsection_sel = page.select(&base_selector);
 
     let mut size = 0;
@@ -97,16 +128,23 @@ fn get_game_section(page: &Html, game: Games) -> Result<Html, Box<dyn Error>> {
         size += 1;
     }
 
-    let selector = if size == 0 { Selector::parse(format!("{} + table", persona_selector).as_str()).unwrap() } else { base_selector.clone() };
+    let selector = if size == 0 {
+        Selector::parse(format!("{} + table", persona_selector).as_str()).unwrap()
+    } else {
+        base_selector.clone()
+    };
+
     subsection_sel =  page.select(&selector);
-    let subsection = Html::parse_fragment(subsection_sel.map(|n| n.html()).collect::<String>().as_str());
+    let subsection = Html::parse_fragment(subsection_sel.map(|n| n.html())
+        .collect::<String>().as_str());
 
     Ok(subsection)
 }
 
 fn extract_table_data(table_doc: Html) -> Result<HashMap<String, Vec<String>>, Box<dyn Error>> {
     let types = Selector::parse("tbody > tr:nth-child(1) > th").unwrap();
-    let types_table: Vec<String> = table_doc.select(&types).map(|t| t.inner_html()).collect();
+    let types_table: Vec<String> = table_doc.select(&types)
+        .map(|t| t.inner_html()).collect();
     let resistances = Selector::parse("tbody > tr:nth-child(2) > td").unwrap();
     let mut resistance_info: HashMap<String, Vec<String>> = HashMap::new();
 
@@ -127,7 +165,7 @@ fn extract_table_data(table_doc: Html) -> Result<HashMap<String, Vec<String>>, B
     Ok(resistance_info)
 }
 
-fn get_page_id(persona: &String, shadow: &String) -> Result<i32, Box<dyn Error>> {
+fn get_page_id(shadow: &String) -> Result<i32, Box<dyn Error>> {
     // https://megamitensei.fandom.com/api/v1#!/Articles
     // https://megamitensei.fandom.com/api.php?format=json&action=query&redirect=1&titles=Intrepid_Knight
     // https://megamitensei.fandom.com/api/v1/Articles/AsJson?id=
@@ -141,8 +179,7 @@ fn get_page_id(persona: &String, shadow: &String) -> Result<i32, Box<dyn Error>>
     let page_meta_encoded = utf8_percent_encode(page_id_endpoint.as_str(), FRAGMENT);
     let page_meta: String = page_meta_encoded.collect();
 
-    let body: PageMeta = reqwest::blocking::get(&page_meta)?
-        .json()?;
+    let body: PageMeta = reqwest::blocking::get(&page_meta)?.json()?;
 
     Ok(body.query.pageids[0].parse::<i32>().unwrap())
 }
@@ -196,9 +233,9 @@ fn determine_game(game: &String) -> Games {
 
 fn normalize_variant(variant: &str) -> String {
     match variant {
-        "normal" => "Normal Encounter".to_string(),
+        "normal" => "The Journey".to_string(),
         "sub" => "Sub-boss".to_string(),
-        _ => "Normal Encounter".to_string()
+        _ => "The Journey".to_string()
     }
 }
 
@@ -232,7 +269,7 @@ fn main() -> Result<(), Box<dyn Error>>{
 
     let game = determine_game(&persona);
 
-    let page_id = match get_page_id(&persona, &shadow) {
+    let page_id = match get_page_id(&shadow) {
         Ok(id) => { id },
         Err(e) => panic!(e.to_string())
     };
