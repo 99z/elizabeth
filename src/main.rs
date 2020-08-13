@@ -7,6 +7,7 @@ use core::fmt;
 use scraper::{Selector, Html};
 use std::error::Error;
 use colored::*;
+use argh::FromArgs;
 
 #[derive(Debug, Clone)]
 struct PageParseError;
@@ -43,6 +44,22 @@ struct Query {
 #[derive(Deserialize, Debug)]
 struct Page {
     content: String
+}
+
+#[derive(FromArgs)]
+/// Find shadow resistance/weakness information
+struct Opts {
+    /// name of shadow
+    #[argh(option, short = 's')]
+    shadow: String,
+
+    /// persona series number
+    #[argh(option, short = 'p')]
+    persona: String,
+
+    /// enemy variant
+    #[argh(option, default = "String::from(\"The Journey\")")]
+    variant: String
 }
 
 #[derive(PartialEq)]
@@ -240,36 +257,11 @@ fn normalize_variant(variant: &str) -> String {
 }
 
 fn main() -> Result<(), Box<dyn Error>>{
-    let args: Vec<String> = args().collect();
-    let mut opts = getopts::Options::new();
-    opts.reqopt("s", "shadow", "Name of shadow", "SHADOW")
-        .reqopt("p", "persona", "Series number", "PERSONA")
-        .optopt("v", "variant", "Enemy variant", "VARIANT");
+    let opts: Opts = argh::from_env();
 
-    let matches = match opts.parse(&args[1..]) {
-        Ok(m) => { m },
-        Err(f) => { panic!(f.to_string()) }
-    };
+    let game = determine_game(&opts.shadow);
 
-    let persona = match matches.opt_str("p") {
-        Some(p) => { p },
-        None => { "p3".to_string() }
-    };
-    let shadow = match matches.opt_str("s") {
-        Some(s) => { s },
-        None => {
-            eprintln!("Must specify shadow name.");
-            return Err(NoShadowError.into())
-        }
-    };
-    let variant = match matches.opt_str("v") {
-        Some(v) => { normalize_variant(&v) },
-        None => { "Normal Encounter".to_string() }
-    };
-
-    let game = determine_game(&persona);
-
-    let page_id = match get_page_id(&shadow) {
+    let page_id = match get_page_id(&opts.shadow) {
         Ok(id) => { id },
         Err(e) => panic!(e.to_string())
     };
@@ -289,7 +281,7 @@ fn main() -> Result<(), Box<dyn Error>>{
         Err(e) => { panic!(e.to_string()) }
     };
 
-    let table_node = match get_table_node(&subsection, &variant) {
+    let table_node = match get_table_node(&subsection, &opts.variant) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("{}", e.to_string());
