@@ -1,4 +1,3 @@
-use std::env::args;
 use std::collections::HashMap;
 use serde::{Deserialize};
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
@@ -58,12 +57,20 @@ struct Opts {
     persona: String,
 
     /// enemy variant
-    #[argh(option, default = "String::from(\"The Journey\")")]
+    #[argh(option, short = 'v', default = "String::from(\"The Journey\")")]
     variant: String
 }
 
-#[derive(PartialEq)]
+#[derive(Debug, Clone)]
+struct Game {
+    entry: Games,
+    tab_name: String,
+    variant: Option<String>
+}
+
+#[derive(PartialEq, Copy, Clone, Debug)]
 enum Games {
+    P3,
     P3J,
     P3A,
     P4,
@@ -94,42 +101,35 @@ fn get_page(page_id: &i32) -> Result<Html, Box<dyn Error>> {
     Ok(document)
 }
 
-fn get_table_node(doc: &Html, variant: &String) -> Result<Html, Box<dyn Error>> {
+fn get_table_node(doc: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
     let tabs = Selector::parse(".tabbertab").unwrap();
     let tab_selector = match doc
         .select(&tabs)
         .position(|t| t.value().attr("title")
-        .unwrap() == variant
+        .unwrap() == game.variant.as_ref().unwrap()
     ) {
         Some(idx) => gen_table_selector(&idx),
         None => {
-            if variant == "The Journey" {
-                match doc
-                    .select(&tabs)
-                    .position(|t| t.value().attr("title")
-                    .unwrap() == "Normal Encounter"
-                ) {
-                    Some(idx) => gen_table_selector(&idx),
-                    None => Selector::parse("table > tbody > tr > td >
-                        table:nth-child(1) > tbody > tr > td > table:nth-child(2)")
-                        .unwrap()
-                };
+            println!("{}", game.tab_name);
+            match doc
+                .select(&tabs)
+                .position(|t| t.value().attr("title")
+                .unwrap() == game.tab_name
+            ) {
+                Some(idx) => gen_table_selector(&idx),
+                None => return Err(NoShadowError.into())
             }
-
-            Selector::parse("table > tbody > tr > td > table:nth-child(1) >
-                tbody > tr > td > table:nth-child(2)"
-            ).unwrap()
         }
     };
-    let table_node = doc.select(&tab_selector);
 
+    let table_node = doc.select(&tab_selector);
     let resistance_table = Html::parse_fragment(table_node.map(|n| n.html())
         .collect::<String>().as_str());
     Ok(resistance_table)
 }
 
-fn get_game_section(page: &Html, game: Games) -> Result<Html, Box<dyn Error>> {
-    let persona_selector = if game == Games::P3J {
+fn get_game_section(page: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
+    let persona_selector = if game.entry == Games::P3J || game.entry == Games::P3A {
         P3_SELECTOR
     } else {
         P4_SELECTOR
@@ -237,29 +237,65 @@ fn print_resistances(table: &HashMap<String, Vec<String>>) {
     }
 }
 
-fn determine_game(game: &String) -> Games {
+fn determine_game(game: &String) -> Game {
     match game.to_lowercase().as_str() {
-        "3" => Games::P3J,
-        "3j" => Games::P3J,
-        "3a" => Games::P3A,
-        "4" => Games::P4,
-        "4g" => Games::P4G,
-        _ => Games::P3J
+        "3" => Game {
+            entry: Games::P3,
+            tab_name: "Persona 3".to_string(),
+            variant: Some("Normal Encounter".to_string())
+        },
+        "3j" => Game {
+            entry: Games::P3J,
+            tab_name: "The Journey".to_string(),
+            variant: Some("Normal Encounter".to_string())
+        },
+        "3a" => Game {
+            entry: Games::P3A,
+            tab_name: "The Answer".to_string(),
+            variant: None
+        },
+        "4" => Game {
+            entry: Games::P4,
+            tab_name: "Persona 4".to_string(),
+            variant: None
+        },
+        "4g" => Game {
+            entry: Games::P4G,
+            tab_name: "Golden".to_string(),
+            variant: None
+        },
+        _ => Game {
+            entry: Games::P3J,
+            tab_name: "The Journey".to_string(),
+            variant: Some("Normal Encounter".to_string())
+        },
     }
 }
 
-fn normalize_variant(variant: &str) -> String {
+fn normalize_variant(variant: &str, game: Game) -> Game {
     match variant {
-        "normal" => "The Journey".to_string(),
-        "sub" => "Sub-boss".to_string(),
-        _ => "The Journey".to_string()
+        "normal" => Game {
+            entry: game.entry.clone(),
+            tab_name: game.tab_name.clone(),
+            variant: Some("Normal Encounter".to_string())
+        },
+        "sub" => Game {
+            entry: game.entry.clone(),
+            tab_name: game.tab_name.clone(),
+            variant: Some("Sub-boss".to_string())
+        },
+        _ => Game {
+            entry: game.entry.clone(),
+            tab_name: game.tab_name.clone(),
+            variant: Some("Normal Encounter".to_string())
+        }
     }
 }
 
 fn main() -> Result<(), Box<dyn Error>>{
     let opts: Opts = argh::from_env();
 
-    let game = determine_game(&opts.shadow);
+    let game = determine_game(&opts.persona);
 
     let page_id = match get_page_id(&opts.shadow) {
         Ok(id) => { id },
@@ -276,12 +312,14 @@ fn main() -> Result<(), Box<dyn Error>>{
         Err(e) => { panic!(e.to_string()) }
     };
 
-    let subsection = match get_game_section(&page, game) {
+    let subsection = match get_game_section(&page, &game) {
         Ok(s) => { s },
         Err(e) => { panic!(e.to_string()) }
     };
 
-    let table_node = match get_table_node(&subsection, &opts.variant) {
+    let game_normalized_variant = normalize_variant(&opts.variant, game);
+
+    let table_node = match get_table_node(&subsection, &game_normalized_variant) {
         Ok(t) => t,
         Err(e) => {
             eprintln!("{}", e.to_string());
