@@ -110,14 +110,14 @@ fn get_table_node(doc: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
     ) {
         Some(idx) => gen_table_selector(&idx),
         None => {
-            println!("{}", game.tab_name);
             match doc
                 .select(&tabs)
                 .position(|t| t.value().attr("title")
                 .unwrap() == game.tab_name
             ) {
                 Some(idx) => gen_table_selector(&idx),
-                None => return Err(NoShadowError.into())
+                None => Selector::parse("table > tbody > tr > td > table:nth-child(1) >\
+                tbody > tr > td > table:nth-child(2)").unwrap()
             }
         }
     };
@@ -129,7 +129,7 @@ fn get_table_node(doc: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
 }
 
 fn get_game_section(page: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
-    let persona_selector = if game.entry == Games::P3J || game.entry == Games::P3A {
+    let persona_selector = if game.entry == Games::P3 || game.entry == Games::P3J || game.entry == Games::P3A {
         P3_SELECTOR
     } else {
         P4_SELECTOR
@@ -146,6 +146,7 @@ fn get_game_section(page: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
     }
 
     let selector = if size == 0 {
+        // case when no table tabs are present, probably when shadow was only in base 3/4
         Selector::parse(format!("{} + table", persona_selector).as_str()).unwrap()
     } else {
         base_selector.clone()
