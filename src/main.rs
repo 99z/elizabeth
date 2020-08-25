@@ -52,11 +52,13 @@ struct Opts {
     #[argh(option, short = 's')]
     shadow: String,
 
-    /// persona series number
+    /// persona series number.
+    /// One of: 3, 3j, 3a, 4, 4g
     #[argh(option, short = 'p')]
     persona: String,
 
-    /// enemy variant
+    /// enemy variant.
+    /// Defaults to 'normal', can be 'normal' or 'sub'
     #[argh(option, short = 'v', default = "String::from(\"The Journey\")")]
     variant: String
 }
@@ -77,8 +79,8 @@ enum Games {
     P4G
 }
 
-const P3_SELECTOR: &str = "#Persona_3_2";
-const P4_SELECTOR: &str = "#Persona_4_2";
+const P3_SELECTOR: &str = "[id^=Persona_3]";
+const P4_SELECTOR: &str = "[id^=Persona_4]";
 
 fn gen_table_selector(index: &usize) -> Selector {
     let sel_string = format!(
@@ -89,7 +91,7 @@ fn gen_table_selector(index: &usize) -> Selector {
     Selector::parse(sel_string.as_str()).unwrap()
 }
 
-fn get_page(page_id: &i32) -> Result<Html, Box<dyn Error>> {
+fn get_page(page_id: &isize) -> Result<Html, Box<dyn Error>> {
     let page_endpoint = format!(
         "https://megamitensei.fandom.com/api/v1/Articles/AsJson?id={}",
         page_id
@@ -159,6 +161,22 @@ fn get_game_section(page: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
     Ok(subsection)
 }
 
+// Necessary to handle the seemingly random cases when resistance text
+// is surrounded by some html tag, e.g. <span>Weak</span>
+fn strip_html(cell: String) -> String {
+    if cell.contains("Weak") {
+       return String::from("Weak");
+    } else if cell.contains("Strong") {
+        return String::from("Strong");
+    } else if cell.contains("Repel") {
+        return String::from("Repel");
+    } else if cell.contains("Null") {
+        return String::from("Null");
+    }
+
+    String::from("Neutral")
+}
+
 fn extract_table_data(table_doc: Html) -> Result<HashMap<String, Vec<String>>, Box<dyn Error>> {
     let types = Selector::parse("tbody > tr:nth-child(1) > th").unwrap();
     let types_table: Vec<String> = table_doc.select(&types)
@@ -167,11 +185,8 @@ fn extract_table_data(table_doc: Html) -> Result<HashMap<String, Vec<String>>, B
     let mut resistance_info: HashMap<String, Vec<String>> = HashMap::new();
 
     for (idx, element) in table_doc.select(&resistances).enumerate() {
-        let res = if element.inner_html().trim() == "-" {
-            "Neutral".to_string()
-        } else {
-            element.inner_html().trim().to_string()
-        };
+        let stripped = strip_html(element.inner_html());
+        let res = stripped.trim().to_string();
 
         if resistance_info.get(&res).is_none() {
             resistance_info.insert(res.clone(), vec![]);
@@ -183,7 +198,7 @@ fn extract_table_data(table_doc: Html) -> Result<HashMap<String, Vec<String>>, B
     Ok(resistance_info)
 }
 
-fn get_page_id(shadow: &String) -> Result<i32, Box<dyn Error>> {
+fn get_page_id(shadow: &String) -> Result<isize, Box<dyn Error>> {
     // https://megamitensei.fandom.com/api/v1#!/Articles
     // https://megamitensei.fandom.com/api.php?format=json&action=query&redirect=1&titles=Intrepid_Knight
     // https://megamitensei.fandom.com/api/v1/Articles/AsJson?id=
@@ -199,7 +214,7 @@ fn get_page_id(shadow: &String) -> Result<i32, Box<dyn Error>> {
 
     let body: PageMeta = reqwest::blocking::get(&page_meta)?.json()?;
 
-    Ok(body.query.pageids[0].parse::<i32>().unwrap())
+    Ok(body.query.pageids[0].parse::<isize>().unwrap())
 }
 
 fn print_resistances(table: &HashMap<String, Vec<String>>) {
@@ -226,8 +241,15 @@ fn print_resistances(table: &HashMap<String, Vec<String>>) {
                 }
                 println!();
             },
+            "Repel" => {
+                print!("{}", "REPEL: ".purple());
+                for k in kinds {
+                    print!("{} ", k);
+                }
+                println!();
+            },
             "Neutral" => {
-                print!("{}", "NEUTRAL: ".black());
+                print!("{}", "NEUTRAL: ".yellow());
                 for k in kinds {
                     print!("{} ", k);
                 }
