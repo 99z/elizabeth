@@ -104,7 +104,12 @@ fn get_page(page_id: &isize) -> Result<Html, Box<dyn Error>> {
 }
 
 fn get_table_node(doc: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
-    let tabs = Selector::parse(".tabbertab").unwrap();
+    let mut tabs = Selector::parse(".tabbertab > .tabber > .tabbertab").unwrap();
+    let size = doc.select(&tabs).count();
+    if size < 1 {
+        tabs = Selector::parse(".tabbertab").unwrap();
+    }
+
     let tab_selector = match doc
         .select(&tabs)
         .position(|t| t.value().attr("title")
@@ -142,12 +147,7 @@ fn get_game_section(page: &Html, game: &Game) -> Result<Html, Box<dyn Error>> {
     ).unwrap();
     let mut subsection_sel = page.select(&base_selector);
 
-    let mut size = 0;
-    for _ in subsection_sel {
-        size += 1;
-    }
-
-    let selector = if size == 0 {
+    let selector = if subsection_sel.count() == 0 {
         // case when no table tabs are present, probably when shadow was only in base 3/4
         Selector::parse(format!("{} + table", persona_selector).as_str()).unwrap()
     } else {
