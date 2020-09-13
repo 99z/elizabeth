@@ -5,16 +5,18 @@ use colored::*;
 // is surrounded by some html tag, e.g. <span>Weak</span>
 pub fn strip_cell_tags(cell: String) -> String {
     if cell.contains("Weak") {
-        return String::from("Weak");
+        return "Weak".to_string();
     } else if cell.contains("Strong") {
-        return String::from("Strong");
+        return "Strong".to_string();
     } else if cell.contains("Repel") {
-        return String::from("Repel");
+        return "Repel".to_string();
     } else if cell.contains("Null") {
-        return String::from("Null");
+        return "Null".to_string();
+    } else if cell.contains("Drain") {
+        return "Drain".to_string();
     }
 
-    String::from("Neutral")
+    "Neutral".to_string()
 }
 
 pub fn print_resistances(table: &HashMap<String, Vec<String>>) {
@@ -55,6 +57,13 @@ pub fn print_resistances(table: &HashMap<String, Vec<String>>) {
                 }
                 println!();
             },
+            "Drain" => {
+                print!("{}", "DRAIN: ".bright_green());
+                for k in kinds {
+                    print!("{}", k);
+                }
+                println!();
+            }
             _ => { }
         }
     }

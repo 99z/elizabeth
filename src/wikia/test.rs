@@ -39,6 +39,7 @@ fn game_section_wrapper(shadow_page_id: isize, expected_tabs: u8) {
     let document = page_html(&shadow_page_id).unwrap();
     let game = Game {
         entry: PersonaTitle::P3J,
+        entry_text: "Persona 3 FES",
         tab_name: "The Journey",
         variant: Some("Normal Encounter")
     };
@@ -87,6 +88,7 @@ fn game_table_wrapper(shadow_page_id: isize) {
     let document = page_html(&shadow_page_id).unwrap();
     let game = Game {
         entry: PersonaTitle::P3J,
+        entry_text: "Persona 3 FES",
         tab_name: "The Journey",
         variant: Some("Normal Encounter")
     };
@@ -125,6 +127,7 @@ fn extract_table_data_wrapper(shadow_page_id: isize, truth: HashMap<String, Vec<
     let document = page_html(&shadow_page_id).unwrap();
     let game = Game {
         entry: PersonaTitle::P3J,
+        entry_text: "Persona 3 FES",
         tab_name: "The Journey",
         variant: Some("Sub-boss")
     };
@@ -157,3 +160,25 @@ fn extract_table_data_ok() {
 
     extract_table_data_wrapper(5302 as isize, known_data);
 }
+
+// problem pages:
+//
+// https://megamitensei.fandom.com/wiki/Laughing_Table
+//  * FIXED appears in OG 3/FES, but tabs are 'Persona 3' and 'The Answer', thus failing when 3j is passed
+//
+// https://megamitensei.fandom.com/wiki/Crying_Table#Sub-Boss
+//  * FIXED has sub-boss, journey and answer tabs. if sub is requested, matches Journey tab b/c variant is
+//      checked AFTER tab_name
+//
+// https://megamitensei.fandom.com/wiki/Devious_Maya#Normal%20Encounter
+//  * has 2 tabs inside 'The Journey' tab because a variant is summoned by Hanged Man during battle
+//      afaik only case where this happens, so maybe hardcode solution
+//
+// https://megamitensei.fandom.com/wiki/Indolent_Maya
+//  * FIXED doesn't have tabs but has separate Journey and Answer tables
+//
+// https://megamitensei.fandom.com/wiki/Magic_Hand
+// * FIXED appears in FES but only had 'Persona 3' listed in appearances section
+//
+// https://megamitensei.fandom.com/wiki/Conceited_Maya
+// * Answer only, no game section, no tabs

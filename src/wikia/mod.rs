@@ -7,7 +7,7 @@ use serde::{Deserialize};
 use scraper::{Selector, Html};
 use std::collections::HashMap;
 use crate::utils;
-use crate::errors::{SelectorParseError, NoVariantError};
+use crate::errors::{SelectorParseError, NoVariantError, NoShadowError};
 
 #[derive(Deserialize, Debug)]
 struct PageMeta {
@@ -27,7 +27,8 @@ struct Page {
 #[derive(Debug, Clone)]
 pub struct Game<'a> {
     pub entry: PersonaTitle,
-    pub tab_name: &'a str,
+    pub entry_text: &'a str,
+    pub tab_names: Vec<String>,
     pub variant: Option<&'a str>
 }
 
@@ -69,10 +70,34 @@ pub fn page_html(page_id: &isize) -> anyhow::Result<Html> {
         page_id
     );
     let body: Page = reqwest::blocking::get(&page_endpoint)?.json()?;
-    // println!("{}", body.content);
+    // println!("{:#?}", body.content);
 
     let document = Html::parse_fragment(body.content.as_str());
     Ok(document)
+}
+
+// determine if shadow appears only in 1 game, changing the base selector
+// yea, seriously, this was the best way I could think of given the html that comes back
+pub fn appears_in(page: &Html, entry: &Game) -> anyhow::Result<bool> {
+    // weird selector right?
+    // https://megamitensei.fandom.com/wiki/Bigoted_Maya
+    // note the 'Appearaces' section
+    // in addition to having an unpredictable page structure, seems i can't even get
+    // a guarantee things will be spelled correctly
+    // but wait! it gets better:
+    // https://megamitensei.fandom.com/wiki/Desirous_Maya
+    let appearances_section = match Selector::parse("[id^=Appe] > ul > li > i") {
+        Ok(s) => s,
+        Err(_) => return Err(NoShadowError.into())
+    };
+
+    for element in page.select(&appearances_section) {
+        if entry.entry_text.contains(&element.text().collect::<String>()) {
+            return Ok(true);
+        }
+    }
+
+    Ok(false)
 }
 
 pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {
@@ -82,24 +107,57 @@ pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {
         P4_SELECTOR
     };
 
-    let base_selector = match Selector::parse(format!("{} + .tabber", persona_selector).as_str()) {
-        Ok(s) => s,
-        Err(_) => return Err(SelectorParseError.into())
+    let mut base_selector = Selector::parse(format!("{} + .tabber", persona_selector).as_str()).unwrap();
+
+    let selector = match page.select(&base_selector).count() {
+        0 => {
+            // case when no tabs
+            base_selector = Selector::parse(format!("{} + table", persona_selector).as_str()).unwrap();
+
+            match page.select(&base_selector).count() {
+                0 => {
+                    // case when multiple versions exist (Journey/Answer), but are separate
+                    // tables instead of tabbed
+                    // https://megamitensei.fandom.com/wiki/Indolent_Maya
+                    base_selector = Selector::parse(
+                        format!(
+                            "{} ~ #{} + table",
+                            persona_selector,
+                            game.tab_names.first().unwrap().replace(" ", "_")).as_str()
+                    ).unwrap();
+
+                    match page.select(&base_selector).count() {
+                        // case when shadow only has appearance in one game, and the html
+                        // does not have sections for games
+                        0 => {
+                            base_selector = Selector::parse(".tabber").unwrap();
+
+                            match page.select(&base_selector).count() {
+                                0 => {
+                                    base_selector = Selector::parse(
+                                        format!(
+                                            "[id^={}] + table",
+                                            game.tab_names.first().unwrap().replace(" ", "_")).as_str()
+                                    ).unwrap();
+
+                                    match page.select(&base_selector).count() {
+                                        0 => return Err(NoVariantError.into()),
+                                        _ => base_selector
+                                    }
+                                },
+                                _ => base_selector
+                            }
+                        },
+                        _ => base_selector
+                    }
+                },
+                _ => base_selector
+            }
+        },
+        _ => base_selector
     };
 
-    let mut subsection_sel = page.select(&base_selector);
-
-    let selector = if subsection_sel.count() == 0 {
-        // case when no table tabs are present, probably when shadow was only in base 3/4
-        match Selector::parse(format!("{} + table", persona_selector).as_str()) {
-            Ok(s) => s,
-            Err(_) => return Err(SelectorParseError.into())
-        }
-    } else {
-        base_selector.clone()
-    };
-
-    subsection_sel =  page.select(&selector);
+    let subsection_sel =  page.select(&selector);
     let subsection = Html::parse_fragment(subsection_sel.map(|n| n.html())
         .collect::<String>().as_str());
 
@@ -125,13 +183,13 @@ pub fn game_table(doc: &Html, game: &Game) -> anyhow::Result<Html> {
 
     let tab_selector = match doc
         .select(&tabs)
-        .position(|t| t.value().attr("title").unwrap() == game.variant.unwrap()
+        .position(|t| t.value().attr("title").unwrap().contains( game.variant.unwrap())
         ) {
         Some(idx) => gen_table_selector(&idx)?,
         None => {
             match doc
                 .select(&tabs)
-                .position(|t| t.value().attr("title").unwrap() == game.tab_name
+                .position(|t| game.tab_names.contains(&t.value().attr("title").unwrap().to_string())
                 ) {
                 Some(idx) => gen_table_selector(&idx)?,
                 None => {
@@ -163,7 +221,7 @@ pub fn extract_table_data(table_doc: &Html) -> anyhow::Result<HashMap<String, Ve
         Err(_) => return Err(SelectorParseError.into())
     };
     let types_table: Vec<String> = table_doc.select(&types)
-        .map(|t| t.inner_html()).collect();
+        .map(|t| t.inner_html().trim().to_string()).collect();
 
     let resistances = match Selector::parse("tbody > tr:nth-child(2) > td") {
         Ok(s) => s,
@@ -173,13 +231,13 @@ pub fn extract_table_data(table_doc: &Html) -> anyhow::Result<HashMap<String, Ve
 
     for (idx, element) in table_doc.select(&resistances).enumerate() {
         let stripped = utils::strip_cell_tags(element.inner_html());
-        let res = stripped.trim().to_string();
+        let res = stripped.to_string();
 
         if resistance_info.get(&res).is_none() {
             resistance_info.insert(res.clone(), vec![]);
         }
 
-        resistance_info.get_mut(&res).unwrap().push(types_table[idx].trim().to_string());
+        resistance_info.get_mut(&res).unwrap().push(types_table[idx].to_string());
     }
 
     Ok(resistance_info)

@@ -25,35 +25,35 @@ struct Opts {
 
 fn determine_game(game: &String) -> Game {
     match game.to_lowercase().as_str() {
-        "3" => Game {
-            entry: PersonaTitle::P3,
-            tab_name: "Persona 3",
-            variant: Some("Normal Encounter")
-        },
-        "3j" => Game {
+        "3" | "3j" => Game {
             entry: PersonaTitle::P3J,
-            tab_name: "The Journey",
-            variant: Some("Normal Encounter")
+            entry_text: "Persona 3 FES",
+            tab_names: vec!["The Journey".to_string(), "Persona 3".to_string()],
+            variant: Some("Normal")
         },
         "3a" => Game {
             entry: PersonaTitle::P3A,
-            tab_name: "The Answer",
+            entry_text: "Persona 3 FES",
+            tab_names: vec!["The Answer".to_string()],
             variant: None
         },
         "4" => Game {
             entry: PersonaTitle::P4,
-            tab_name: "Persona 4",
+            entry_text: "Persona 4",
+            tab_names: vec!["Persona 4".to_string()],
             variant: None
         },
         "4g" => Game {
             entry: PersonaTitle::P4G,
-            tab_name: "Golden",
+            entry_text: "Persona 4 Golden",
+            tab_names: vec!["Golden".to_string()],
             variant: None
         },
         _ => Game {
             entry: PersonaTitle::P3J,
-            tab_name: "The Journey",
-            variant: Some("Normal Encounter")
+            entry_text: "Persona 3 FES",
+            tab_names: vec!["The Journey".to_string()],
+            variant: Some("Normal")
         },
     }
 }
@@ -61,10 +61,10 @@ fn determine_game(game: &String) -> Game {
 fn normalize_variant(variant: &str, game: &mut Game) {
     match variant {
         "sub" => {
-            game.variant = Some("Sub-boss")
+            game.variant = Some("Sub")
         },
         "normal" | _ => {
-            game.variant = Some("Normal Encounter")
+            game.variant = Some("Normal")
         }
     }
 }
@@ -82,6 +82,11 @@ fn main() -> anyhow::Result<()> {
     }
 
     let page = wikia::page_html(&page_id)?;
+
+    let appears_in = wikia::appears_in(&page, &game)?;
+    if !appears_in {
+        return Err(errors::NoShadowError.into());
+    }
 
     let subsection = wikia::game_section(&page, &game)?;
 
