@@ -13,11 +13,11 @@ struct Opts {
     shadow: String,
 
     /// persona series number.
-    /// One of: 3, 3j, 3a, 4, 4g
+    /// One of: 3, 3a, 4, 4g
     #[argh(option, short = 'p')]
     persona: String,
 
-    /// enemy variant.
+    /// shadow variant.
     /// Defaults to 'normal', can be 'normal' or 'sub'
     #[argh(option, short = 'v', default = "String::from(\"The Journey\")")]
     variant: String

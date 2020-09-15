@@ -34,7 +34,6 @@ pub struct Game<'a> {
 
 #[derive(PartialEq, Copy, Clone, Debug)]
 pub enum PersonaTitle {
-    P3,
     P3J,
     P3A,
     P4,
@@ -101,7 +100,7 @@ pub fn appears_in(page: &Html, entry: &Game) -> anyhow::Result<bool> {
 }
 
 pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {
-    let persona_selector = if game.entry == PersonaTitle::P3 || game.entry == PersonaTitle::P3J || game.entry == PersonaTitle::P3A {
+    let persona_selector = if game.entry == PersonaTitle::P3J || game.entry == PersonaTitle::P3A {
         P3_SELECTOR
     } else {
         P4_SELECTOR
@@ -109,6 +108,7 @@ pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {
 
     let mut base_selector = Selector::parse(format!("{} + .tabber", persona_selector).as_str()).unwrap();
 
+    // TODO there's gotta be a better way to do this
     let selector = match page.select(&base_selector).count() {
         0 => {
             // case when no tabs
