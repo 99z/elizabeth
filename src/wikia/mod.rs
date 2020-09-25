@@ -6,7 +6,7 @@ use titlecase::titlecase;
 use serde::{Deserialize};
 use scraper::{Selector, Html};
 use std::collections::HashMap;
-use crate::utils;
+use crate::{utils, errors};
 use crate::errors::{SelectorParseError, NoVariantError, NoShadowError};
 
 #[derive(Deserialize, Debug)]
@@ -90,13 +90,67 @@ pub fn appears_in(page: &Html, entry: &Game) -> anyhow::Result<bool> {
         Err(_) => return Err(NoShadowError.into())
     };
 
+    let mut all_appearances = "".to_string();
     for element in page.select(&appearances_section) {
-        if entry.entry_text.contains(&element.text().collect::<String>()) {
-            return Ok(true);
-        }
+        let mut appearance = element.text().collect::<String>();
+        appearance.retain(|c| !c.is_whitespace());
+        all_appearances += &appearance;
+    }
+
+    let entry_trimmed = entry.entry_text.chars().filter(|c| !c.is_whitespace()).collect::<String>();
+    if all_appearances.contains(&entry_trimmed) {
+        return Ok(true);
     }
 
     Ok(false)
+}
+
+pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<Html> {
+    let table_selector = Selector::parse(".table > tbody > tr td:nth-child(1)").unwrap();
+    let asd = "3a".to_string();
+    let answer = utils::determine_game(&asd);
+    let mut games = vec![game.clone(), answer];
+
+    for element in page.select(&table_selector) {
+        let shadow_name = &element.text().collect::<String>();
+        let page_id = get_shadow_page_id(&shadow_name)?;
+        let page_html = page_html(&page_id)?;
+
+        println!("{}", shadow_name);
+        println!();
+        for g in &mut games {
+            println!("{}", g.tab_names.first().unwrap_or(&"Persona 3".to_string()));
+            let appears_in = appears_in(&page_html, g)?;
+            if !appears_in {
+                eprintln!("no matching shadow");
+                continue;
+            }
+
+            let subsection = match game_section(&page_html, g) {
+                Ok(s) => s,
+                Err(e) => {
+                    eprintln!("{}", e);
+                    continue;
+                }
+            };
+
+            let table_node = match game_table(&subsection, g) {
+                Ok(t) => t,
+                Err(e) => {
+                    eprintln!("{}", e);
+                    continue;
+                }
+            };
+
+            let table_data = extract_table_data(&table_node)?;
+            utils::print_resistances(&table_data);
+            println!();
+        }
+
+        println!("---------------------------");
+    }
+
+    Ok(page.clone())
 }
 
 pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {
@@ -183,7 +237,7 @@ pub fn game_table(doc: &Html, game: &Game) -> anyhow::Result<Html> {
 
     let tab_selector = match doc
         .select(&tabs)
-        .position(|t| t.value().attr("title").unwrap().contains( game.variant.unwrap())
+        .position(|t| t.value().attr("title").unwrap().contains( game.variant.unwrap_or("Normal Encounter"))
         ) {
         Some(idx) => gen_table_selector(&idx)?,
         None => {
