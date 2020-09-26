@@ -105,11 +105,25 @@ pub fn appears_in(page: &Html, entry: &Game) -> anyhow::Result<bool> {
     Ok(false)
 }
 
-pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<Html> {
+fn get_other_version(entry: &PersonaTitle) -> Game {
+    if entry == &PersonaTitle::P3J {
+        utils::determine_game("3a")
+    } else if entry == &PersonaTitle::P3A {
+        utils::determine_game("3j")
+    } else if entry == &PersonaTitle::P4 {
+        utils::determine_game("4g")
+    } else if entry == &PersonaTitle::P4G {
+        utils::determine_game("4")
+    } else {
+        utils::determine_game("default")
+    }
+}
+
+pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<()> {
     let table_selector = Selector::parse(".table > tbody > tr td:nth-child(1)").unwrap();
-    let asd = "3a".to_string();
-    let answer = utils::determine_game(&asd);
-    let mut games = vec![game.clone(), answer];
+
+    let other_game = get_other_version(&game.entry);
+    let mut games = vec![game.clone(), other_game];
 
     for element in page.select(&table_selector) {
         let shadow_name = &element.text().collect::<String>();
@@ -150,7 +164,7 @@ pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<Html> {
         println!("---------------------------");
     }
 
-    Ok(page.clone())
+    Ok(())
 }
 
 pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {

@@ -2,7 +2,7 @@ use std::collections::HashMap;
 use colored::*;
 use crate::wikia::{Game, PersonaTitle};
 
-pub fn determine_game(game: &String) -> Game {
+pub fn determine_game(game: &str) -> Game {
     match game.to_lowercase().as_str() {
         "3" | "3j" => Game {
             entry: PersonaTitle::P3J,

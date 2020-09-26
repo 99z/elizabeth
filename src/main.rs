@@ -24,7 +24,7 @@ struct Opts {
 
     /// get all shadow resistance info for specified game.
     /// Defaults to false
-    #[argh(option, short = 'a', default = "false")]
+    #[argh(switch, short = 'a')]
     all: bool
 }
 
@@ -42,7 +42,7 @@ fn normalize_variant(variant: &str, game: &mut Game) {
 fn main() -> anyhow::Result<()> {
     let opts: Opts = argh::from_env();
 
-    let mut game = utils::determine_game(&opts.persona);
+    let mut game = utils::determine_game(&opts.persona.as_str());
     normalize_variant(&opts.variant, &mut game);
 
     let page_id = wikia::get_shadow_page_id(&opts.shadow)?;
@@ -52,20 +52,23 @@ fn main() -> anyhow::Result<()> {
     }
 
     let page = wikia::page_html(&page_id)?;
-    let _no = wikia::arcana_sections(&page, &game)?;
 
-    // let appears_in = wikia::appears_in(&page, &game)?;
-    // if !appears_in {
-    //     return Err(errors::NoShadowError.into());
-    // }
-    //
-    // let subsection = wikia::game_section(&page, &game)?;
-    //
-    // let table_node = wikia::game_table(&subsection, &game)?;
-    //
-    // let table_data = wikia::extract_table_data(&table_node)?;
-    //
-    // utils::print_resistances(&table_data);
+    if opts.all {
+        wikia::arcana_sections(&page, &game)?;
+    } else {
+        let appears_in = wikia::appears_in(&page, &game)?;
+        if !appears_in {
+            return Err(errors::NoShadowError.into());
+        }
+
+        let subsection = wikia::game_section(&page, &game)?;
+
+        let table_node = wikia::game_table(&subsection, &game)?;
+
+        let table_data = wikia::extract_table_data(&table_node)?;
+
+        utils::print_resistances(&table_data);
+    }
 
     Ok(())
 }
