@@ -13,7 +13,7 @@ impl std::error::Error for NoShadowError {}
 
 impl fmt::Display for NoShadowError {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
-        write!(f, "no shadow specified or no matching variant found")
+        write!(f, "no shadow found")
     }
 }
 
