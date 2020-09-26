@@ -1,4 +1,6 @@
-# elizabeth
+# elizabeth [![license: WTFPL](https://img.shields.io/badge/license-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
+
+
 ```shell script
 Usage: target/debug/liz -s <shadow> -p <persona> [-v <variant>]
 
