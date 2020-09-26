@@ -1,4 +1,4 @@
-# elizabeth [![license: WTFPL](https://img.shields.io/badge/license-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
+# elizabeth ![](https://github.com/99z/elizabeth/workflows/Rust/badge.svg) [![license: WTFPL](https://img.shields.io/badge/license-WTFPL-brightgreen.svg)](http://www.wtfpl.net/about/)
 
 
 ```shell script
