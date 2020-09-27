@@ -4,6 +4,8 @@ mod wikia;
 
 use argh::FromArgs;
 use wikia::{Game};
+use inflector::Inflector;
+use crate::wikia::Shadow;
 
 #[derive(FromArgs)]
 /// Find shadow resistance/weakness information
@@ -31,10 +33,10 @@ struct Opts {
 fn normalize_variant(variant: &str, game: &mut Game) {
     match variant {
         "sub" => {
-            game.variant = Some("Sub")
+            game.variant = Some("Sub".to_string())
         },
         "normal" | _ => {
-            game.variant = Some("Normal")
+            game.variant = Some("Normal".to_string())
         }
     }
 }
@@ -54,8 +56,13 @@ fn main() -> anyhow::Result<()> {
     let page = wikia::page_html(&page_id)?;
 
     if opts.all {
-        wikia::arcana_sections(&page, &game)?;
+        let all_shadow_info = wikia::arcana_sections(&page, &game)?;
+        println!("{}", serde_json::to_string(&all_shadow_info)?);
     } else {
+        let mut shadow = Shadow {
+            name: opts.shadow.to_title_case(),
+            info: vec![],
+        };
         let appears_in = wikia::appears_in(&page, &game)?;
         if !appears_in {
             return Err(errors::NoShadowError.into());
@@ -65,9 +72,9 @@ fn main() -> anyhow::Result<()> {
 
         let table_node = wikia::game_table(&subsection, &game)?;
 
-        let table_data = wikia::extract_table_data(&table_node)?;
+        shadow.info.push(wikia::extract_table_data(&table_node, &game)?);
 
-        utils::print_resistances(&table_data);
+        // utils::print_resistances(&shadow.resistances);
     }
 
     Ok(())

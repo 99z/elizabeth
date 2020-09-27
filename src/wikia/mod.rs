@@ -3,7 +3,7 @@ mod test;
 
 use percent_encoding::{utf8_percent_encode, AsciiSet, CONTROLS};
 use titlecase::titlecase;
-use serde::{Deserialize};
+use serde::{Deserialize, Serialize};
 use scraper::{Selector, Html};
 use std::collections::HashMap;
 use crate::{utils, errors};
@@ -25,11 +25,11 @@ struct Page {
 }
 
 #[derive(Debug, Clone)]
-pub struct Game<'a> {
+pub struct Game {
     pub entry: PersonaTitle,
-    pub entry_text: &'a str,
+    pub entry_text: String,
     pub tab_names: Vec<String>,
-    pub variant: Option<&'a str>
+    pub variant: Option<String>
 }
 
 #[derive(PartialEq, Copy, Clone, Debug)]
@@ -38,6 +38,19 @@ pub enum PersonaTitle {
     P3A,
     P4,
     P4G
+}
+
+#[derive(Serialize, Debug)]
+pub struct ShadowInfo {
+    game: String,
+    version: String,
+    resistances: HashMap<String, Vec<String>>
+}
+
+#[derive(Serialize, Debug)]
+pub struct Shadow {
+    pub name: String,
+    pub info: Vec<ShadowInfo>
 }
 
 const P3_SELECTOR: &str = "[id^=Persona_3]";
@@ -119,21 +132,25 @@ fn get_other_version(entry: &PersonaTitle) -> Game {
     }
 }
 
-pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<()> {
+pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<Vec<Shadow>> {
     let table_selector = Selector::parse(".table > tbody > tr td:nth-child(1)").unwrap();
 
     let other_game = get_other_version(&game.entry);
     let mut games = vec![game.clone(), other_game];
+
+    let mut all_shadows: Vec<Shadow> = vec![];
 
     for element in page.select(&table_selector) {
         let shadow_name = &element.text().collect::<String>();
         let page_id = get_shadow_page_id(&shadow_name)?;
         let page_html = page_html(&page_id)?;
 
-        println!("{}", shadow_name);
-        println!();
+        let mut current_shadow = Shadow {
+            name: shadow_name.clone(),
+            info: vec![]
+        };
+
         for g in &mut games {
-            println!("{}", g.tab_names.first().unwrap_or(&"Persona 3".to_string()));
             let appears_in = appears_in(&page_html, g)?;
             if !appears_in {
                 eprintln!("no matching shadow");
@@ -156,15 +173,14 @@ pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<()> {
                 }
             };
 
-            let table_data = extract_table_data(&table_node)?;
-            utils::print_resistances(&table_data);
-            println!();
+            current_shadow.info.push(extract_table_data(&table_node, g)?);
         }
 
-        println!("---------------------------");
+        all_shadows.push(current_shadow);
+        // println!("{}", serde_json::to_string(&current_shadow)?);
     }
 
-    Ok(())
+    Ok(all_shadows)
 }
 
 pub fn game_section(page: &Html, game: &Game) -> anyhow::Result<Html> {
@@ -251,7 +267,10 @@ pub fn game_table(doc: &Html, game: &Game) -> anyhow::Result<Html> {
 
     let tab_selector = match doc
         .select(&tabs)
-        .position(|t| t.value().attr("title").unwrap().contains( game.variant.unwrap_or("Normal Encounter"))
+        .position(|t| t.value().attr("title").unwrap().contains( match &game.variant {
+            Some(v) => v.as_str(),
+            None => "Normal Encounter"
+        })
         ) {
         Some(idx) => gen_table_selector(&idx)?,
         None => {
@@ -283,7 +302,7 @@ pub fn game_table(doc: &Html, game: &Game) -> anyhow::Result<Html> {
     Ok(resistance_table)
 }
 
-pub fn extract_table_data(table_doc: &Html) -> anyhow::Result<HashMap<String, Vec<String>>> {
+pub fn extract_table_data(table_doc: &Html, game: &Game) -> anyhow::Result<ShadowInfo> {
     let types = match Selector::parse("tbody > tr:nth-child(1) > th") {
         Ok(s) => s,
         Err(_) => return Err(SelectorParseError.into())
@@ -295,20 +314,25 @@ pub fn extract_table_data(table_doc: &Html) -> anyhow::Result<HashMap<String, Ve
         Ok(s) => s,
         Err(_) => return Err(SelectorParseError.into())
     };
-    let mut resistance_info: HashMap<String, Vec<String>> = HashMap::new();
+
+    let mut shadow_info = ShadowInfo {
+        game: game.entry_text.clone(),
+        version: game.tab_names[0].clone(),
+        resistances: HashMap::new(),
+    };
 
     for (idx, element) in table_doc.select(&resistances).enumerate() {
         let stripped = utils::strip_cell_tags(element.inner_html());
         let res = stripped.to_string();
 
-        if resistance_info.get(&res).is_none() {
-            resistance_info.insert(res.clone(), vec![]);
+        if shadow_info.resistances.get(&res).is_none() {
+            shadow_info.resistances.insert(res.clone(), vec![]);
         }
 
-        resistance_info.get_mut(&res).unwrap().push(types_table[idx].to_string());
+        shadow_info.resistances.get_mut(&res).unwrap().push(types_table[idx].to_string());
     }
 
-    Ok(resistance_info)
+    Ok(shadow_info)
 }
 
 fn gen_table_selector(index: &usize) -> anyhow::Result<Selector> {
