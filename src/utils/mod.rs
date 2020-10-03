@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use colored::*;
-use crate::wikia::{Game, PersonaTitle};
+use crate::wikia::{Game, PersonaTitle, ShadowInfo, Shadow};
 
 pub fn determine_game(game: &str) -> Game {
     match game.to_lowercase().as_str() {
@@ -55,8 +55,10 @@ pub fn strip_cell_tags(cell: String) -> String {
     "Neutral".to_string()
 }
 
-pub fn print_resistances(table: &HashMap<String, Vec<String>>) {
-    for (resistance, kinds) in table.iter() {
+pub fn print_resistances(shadow: &Shadow) {
+    println!("{}", shadow.name);
+
+    for (resistance, kinds) in &shadow.info.first().unwrap().resistances {
         match resistance.as_str() {
             "Strong" => {
                 print!("{}", "STRONG: ".blue());
@@ -99,7 +101,7 @@ pub fn print_resistances(table: &HashMap<String, Vec<String>>) {
                     print!("{}", k);
                 }
                 println!();
-            }
+            },
             _ => { }
         }
     }

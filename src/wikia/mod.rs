@@ -42,9 +42,9 @@ pub enum PersonaTitle {
 
 #[derive(Serialize, Debug)]
 pub struct ShadowInfo {
-    game: String,
-    version: String,
-    resistances: HashMap<String, Vec<String>>
+    pub game: String,
+    pub version: String,
+    pub resistances: HashMap<String, Vec<String>>
 }
 
 #[derive(Serialize, Debug)]
@@ -55,6 +55,9 @@ pub struct Shadow {
 
 const P3_SELECTOR: &str = "[id^=Persona_3]";
 const P4_SELECTOR: &str = "[id^=Persona_4]";
+
+const P3_ALL_SHADOWS: isize = 2807;
+const P4_ALL_SHADOWS: isize = 12686;
 
 pub fn get_shadow_page_id(shadow: &String) -> anyhow::Result<isize> {
     // https://megamitensei.fandom.com/api/v1#!/Articles
@@ -132,8 +135,14 @@ fn get_other_version(entry: &PersonaTitle) -> Game {
     }
 }
 
-pub fn arcana_sections(page: &Html, game: &Game) -> anyhow::Result<Vec<Shadow>> {
+pub fn arcana_sections(game: &Game) -> anyhow::Result<Vec<Shadow>> {
     let table_selector = Selector::parse(".table > tbody > tr td:nth-child(1)").unwrap();
+    let page_id = if game.entry == PersonaTitle::P3J || game.entry == PersonaTitle::P3A {
+        P3_ALL_SHADOWS
+    } else {
+        P4_ALL_SHADOWS
+    };
+    let page = page_html(&page_id)?;
 
     let other_game = get_other_version(&game.entry);
     let mut games = vec![game.clone(), other_game];

@@ -11,7 +11,7 @@ use crate::wikia::Shadow;
 /// Find shadow resistance/weakness information
 struct Opts {
     /// name of shadow
-    #[argh(option, short = 's')]
+    #[argh(option, short = 's', default = "String::from(\"\")")]
     shadow: String,
 
     /// persona series number.
@@ -47,18 +47,17 @@ fn main() -> anyhow::Result<()> {
     let mut game = utils::determine_game(&opts.persona.as_str());
     normalize_variant(&opts.variant, &mut game);
 
-    let page_id = wikia::get_shadow_page_id(&opts.shadow)?;
-
-    if page_id == -1 {
-        return Err(errors::NoShadowError.into());
-    }
-
-    let page = wikia::page_html(&page_id)?;
-
     if opts.all {
-        let all_shadow_info = wikia::arcana_sections(&page, &game)?;
+        let all_shadow_info = wikia::arcana_sections(&game)?;
         println!("{}", serde_json::to_string(&all_shadow_info)?);
     } else {
+        let page_id = wikia::get_shadow_page_id(&opts.shadow)?;
+
+        if page_id == -1 {
+            return Err(errors::NoShadowError.into());
+        }
+
+        let page = wikia::page_html(&page_id)?;
         let mut shadow = Shadow {
             name: opts.shadow.to_title_case(),
             info: vec![],
@@ -74,7 +73,7 @@ fn main() -> anyhow::Result<()> {
 
         shadow.info.push(wikia::extract_table_data(&table_node, &game)?);
 
-        // utils::print_resistances(&shadow.resistances);
+        utils::print_resistances(&shadow);
     }
 
     Ok(())
