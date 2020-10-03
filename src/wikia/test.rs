@@ -41,9 +41,9 @@ fn page_html_bad_id() {
 // 2. game heading, no tabs: https://megamitensei.fandom.com/wiki/Primitive_Idol
 // 3. Journey/Answer only, no game heading, no tabs: https://megamitensei.fandom.com/wiki/Conceited_Maya
 // 4. Journey AND Answer, game heading, no tabs, separate tables: https://megamitensei.fandom.com/wiki/Indolent_Maya
-fn game_section_wrapper(shadow_page_id: isize, expected_tabs: u8, game: &Game) {
+fn game_section_wrapper(shadow_page_id: isize, expected_tabs: u8, game: &Game, shadow_name: String) {
     let document = page_html(&shadow_page_id).unwrap();
-    let section = game_section(&document, &game);
+    let section = game_section(&document, &game, shadow_name);
     assert!(section.is_ok());
 
     let tabs = section.unwrap().tree.nodes().map(|n| {
@@ -77,7 +77,7 @@ fn game_section_ok_with_tabs() {
         variant: Some("Normal Encounter".to_string())
     };
 
-    game_section_wrapper(10968 as isize, 1, &game);
+    game_section_wrapper(10968 as isize, 1, &game, "Intrepid Knight".to_string());
 }
 
 #[test]
@@ -89,7 +89,7 @@ fn game_section_ok_no_tabs() {
         variant: Some("Normal Encounter".to_string())
     };
 
-    game_section_wrapper(11014 as isize, 0, &game);
+    game_section_wrapper(11014 as isize, 0, &game, "Primitive Idol".to_string());
 }
 
 #[test]
@@ -101,7 +101,7 @@ fn game_section_single_no_heading_no_tabs() {
         variant: Some("Normal Encounter".to_string())
     };
 
-    game_section_wrapper(11023 as isize, 0, &game);
+    game_section_wrapper(11023 as isize, 0, &game, "Conceited Maya".to_string());
 }
 
 #[test]
@@ -113,7 +113,7 @@ fn game_section_double_heading_no_tabs() {
         variant: Some("Normal Encounter".to_string())
     };
 
-    game_section_wrapper(14533 as isize, 0, &game);
+    game_section_wrapper(14533 as isize, 0, &game, "Indolent Maya".to_string());
 }
 
 // should return correct table structure for:
@@ -123,14 +123,17 @@ fn game_section_double_heading_no_tabs() {
 // 4. no tabs: https://megamitensei.fandom.com/wiki/Silent_Book
 // 5. 'Persona 3' and 'The Answer' tabs, instead of 'The Journey' but does appear in FES: https://megamitensei.fandom.com/wiki/Laughing_Table
 // 6. appears in Journey/Answer and has sub-boss variant: https://megamitensei.fandom.com/wiki/Crying_Table
-fn game_table_wrapper(shadow_page_id: isize, game: &Game) -> anyhow::Result<Element> {
+fn game_table_wrapper(shadow_page_id: isize, game: &Game, shadow_name: String) -> anyhow::Result<Element> {
     let document = page_html(&shadow_page_id)?;
-    let section = game_section(&document, &game)?;
-    let table = game_table(&section, &game)?;
+    let section = game_section(&document, &game, shadow_name.clone())?;
+    let table = game_table(&section, &game, shadow_name.clone())?;
 
     let third = match table.tree.nodes().nth(3) {
         Some(n) => n,
-        None => return Err(NoShadowError.into())
+        None => return Err(errors::NoShadowError {
+            name: shadow_name.clone(),
+            game: game.entry_text.clone()
+        }.into())
     };
     Ok(third.value().as_element().cloned().unwrap())
 }
@@ -148,7 +151,7 @@ fn game_table_nested_tabs() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(31809 as isize, &game);
+    let element = game_table_wrapper(31809 as isize, &game, "Green Sigil".to_string());
     assert!(element.is_ok());
 
     let element = element.unwrap();
@@ -164,7 +167,7 @@ fn game_table_variant_name() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(5302 as isize, &game);
+    let element = game_table_wrapper(5302 as isize, &game, "Liberating Idol".to_string());
     assert!(element.is_ok());
 
     let element = element.unwrap();
@@ -180,7 +183,7 @@ fn game_table_game_name() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(5301 as isize, &game);
+    let element = game_table_wrapper(5301 as isize, &game, "Killing Hand".to_string());
     assert!(element.is_ok());
 
     let element = element.unwrap();
@@ -196,7 +199,7 @@ fn game_table_no_tabs() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(31995 as isize, &game);
+    let element = game_table_wrapper(31995 as isize, &game, "Silent Book".to_string());
     assert!(element.is_ok());
 
     let element = element.unwrap();
@@ -212,7 +215,7 @@ fn game_table_ok_p3_answer_tabs() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(24131 as isize, &game);
+    let element = game_table_wrapper(24131 as isize, &game, "Laughing Table".to_string());
     assert!(element.is_ok());
 
     let element = element.unwrap();
@@ -228,7 +231,7 @@ fn game_table_not_ok_p3_answer_tabs() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(24131 as isize, &game);
+    let element = game_table_wrapper(24131 as isize, &game, "Laughing Table".to_string());
     assert!(element.is_err());
 }
 
@@ -241,14 +244,14 @@ fn game_table_two_games_variant() {
         variant: Some("Normal".to_string())
     };
 
-    let element = game_table_wrapper(10965 as isize, &game);
+    let element = game_table_wrapper(10965 as isize, &game, "Crying Table".to_string());
     assert!(element.is_ok());
 
     let element = element.unwrap();
     assert!(got_table(element));
 }
 
-fn extract_table_data_wrapper(shadow_page_id: isize, truth: HashMap<String, Vec<String>>) {
+fn extract_table_data_wrapper(shadow_page_id: isize, truth: HashMap<String, Vec<String>>, shadow_name: String) {
     let document = page_html(&shadow_page_id).unwrap();
     let game = Game {
         entry: PersonaTitle::P3J,
@@ -256,8 +259,8 @@ fn extract_table_data_wrapper(shadow_page_id: isize, truth: HashMap<String, Vec<
         tab_names: vec!["The Journey".to_string()],
         variant: Some("Sub-boss".to_string())
     };
-    let section = game_section(&document, &game).unwrap();
-    let table = game_table(&section, &game).unwrap();
+    let section = game_section(&document, &game, shadow_name.clone()).unwrap();
+    let table = game_table(&section, &game, shadow_name.clone()).unwrap();
     let data = extract_table_data(&table, &game).unwrap();
 
     assert_eq!(data.resistances.len(), truth.len());
@@ -283,11 +286,5 @@ fn extract_table_data_ok() {
     known_data.insert("Repel".to_string(), vec!["Wind".to_string()]);
     known_data.insert("Null".to_string(), vec!["Fire".to_string()]);
 
-    extract_table_data_wrapper(5302 as isize, known_data);
+    extract_table_data_wrapper(5302 as isize, known_data, "Liberating Idol".to_string());
 }
-
-// problem pages:
-//
-// https://megamitensei.fandom.com/wiki/Devious_Maya#Normal%20Encounter
-//  * has 2 tabs inside 'The Journey' tab because a variant is summoned by Hanged Man during battle
-//      afaik only case where this happens, so maybe hardcode solution

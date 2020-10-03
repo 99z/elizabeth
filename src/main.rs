@@ -54,7 +54,10 @@ fn main() -> anyhow::Result<()> {
         let page_id = wikia::get_shadow_page_id(&opts.shadow)?;
 
         if page_id == -1 {
-            return Err(errors::NoShadowError.into());
+            return Err(errors::NoShadowError {
+                name: opts.shadow.to_title_case(),
+                game: game.entry_text
+            }.into());
         }
 
         let page = wikia::page_html(&page_id)?;
@@ -64,12 +67,15 @@ fn main() -> anyhow::Result<()> {
         };
         let appears_in = wikia::appears_in(&page, &game)?;
         if !appears_in {
-            return Err(errors::NoShadowError.into());
+            return Err(errors::NoShadowError {
+                name: shadow.name,
+                game: game.entry_text
+            }.into());
         }
 
-        let subsection = wikia::game_section(&page, &game)?;
+        let subsection = wikia::game_section(&page, &game, shadow.name.clone())?;
 
-        let table_node = wikia::game_table(&subsection, &game)?;
+        let table_node = wikia::game_table(&subsection, &game, shadow.name.clone())?;
 
         shadow.info.push(wikia::extract_table_data(&table_node, &game)?);
 
