@@ -1,38 +1,38 @@
 use std::collections::HashMap;
 use colored::*;
-use crate::wikia::{Game, PersonaTitle};
+use crate::wikia::{Game, PersonaTitle, ShadowInfo, Shadow};
 
 pub fn determine_game(game: &str) -> Game {
     match game.to_lowercase().as_str() {
         "3" | "3j" => Game {
             entry: PersonaTitle::P3J,
-            entry_text: "Persona 3 FES",
+            entry_text: "Persona 3 FES".to_string(),
             tab_names: vec!["The Journey".to_string(), "Persona 3".to_string()],
-            variant: Some("Normal")
+            variant: Some("Normal".to_string())
         },
         "3a" => Game {
             entry: PersonaTitle::P3A,
-            entry_text: "Persona 3 FES",
+            entry_text: "Persona 3 FES".to_string(),
             tab_names: vec!["The Answer".to_string()],
             variant: None
         },
         "4" => Game {
             entry: PersonaTitle::P4,
-            entry_text: "Persona 4",
+            entry_text: "Persona 4".to_string(),
             tab_names: vec!["Persona 4".to_string()],
             variant: None
         },
         "4g" => Game {
             entry: PersonaTitle::P4G,
-            entry_text: "Persona 4 Golden",
+            entry_text: "Persona 4 Golden".to_string(),
             tab_names: vec!["Golden".to_string()],
             variant: None
         },
         _ => Game {
             entry: PersonaTitle::P3J,
-            entry_text: "Persona 3 FES",
+            entry_text: "Persona 3 FES".to_string(),
             tab_names: vec!["The Journey".to_string()],
-            variant: Some("Normal")
+            variant: Some("Normal".to_string())
         },
     }
 }
@@ -55,8 +55,10 @@ pub fn strip_cell_tags(cell: String) -> String {
     "Neutral".to_string()
 }
 
-pub fn print_resistances(table: &HashMap<String, Vec<String>>) {
-    for (resistance, kinds) in table.iter() {
+pub fn print_resistances(shadow: &Shadow) {
+    println!("{}", shadow.name);
+
+    for (resistance, kinds) in &shadow.info.first().unwrap().resistances {
         match resistance.as_str() {
             "Strong" => {
                 print!("{}", "STRONG: ".blue());
@@ -99,7 +101,7 @@ pub fn print_resistances(table: &HashMap<String, Vec<String>>) {
                     print!("{}", k);
                 }
                 println!();
-            }
+            },
             _ => { }
         }
     }
