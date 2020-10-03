@@ -72,9 +72,9 @@ fn game_section_wrapper(shadow_page_id: isize, expected_tabs: u8, game: &Game) {
 fn game_section_ok_with_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3 FES",
+        entry_text: "Persona 3 FES".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal Encounter")
+        variant: Some("Normal Encounter".to_string())
     };
 
     game_section_wrapper(10968 as isize, 1, &game);
@@ -84,9 +84,9 @@ fn game_section_ok_with_tabs() {
 fn game_section_ok_no_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3 FES",
+        entry_text: "Persona 3 FES".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal Encounter")
+        variant: Some("Normal Encounter".to_string())
     };
 
     game_section_wrapper(11014 as isize, 0, &game);
@@ -96,9 +96,9 @@ fn game_section_ok_no_tabs() {
 fn game_section_single_no_heading_no_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3 FES",
+        entry_text: "Persona 3 FES".to_string(),
         tab_names: vec!["The Answer".to_string()],
-        variant: Some("Normal Encounter")
+        variant: Some("Normal Encounter".to_string())
     };
 
     game_section_wrapper(11023 as isize, 0, &game);
@@ -108,9 +108,9 @@ fn game_section_single_no_heading_no_tabs() {
 fn game_section_double_heading_no_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3 FES",
+        entry_text: "Persona 3 FES".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal Encounter")
+        variant: Some("Normal Encounter".to_string())
     };
 
     game_section_wrapper(14533 as isize, 0, &game);
@@ -143,9 +143,9 @@ fn got_table(e: Element) -> bool {
 fn game_table_nested_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(31809 as isize, &game);
@@ -159,9 +159,9 @@ fn game_table_nested_tabs() {
 fn game_table_variant_name() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(5302 as isize, &game);
@@ -175,9 +175,9 @@ fn game_table_variant_name() {
 fn game_table_game_name() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(5301 as isize, &game);
@@ -191,9 +191,9 @@ fn game_table_game_name() {
 fn game_table_no_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(31995 as isize, &game);
@@ -207,9 +207,9 @@ fn game_table_no_tabs() {
 fn game_table_ok_p3_answer_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Answer".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(24131 as isize, &game);
@@ -223,9 +223,9 @@ fn game_table_ok_p3_answer_tabs() {
 fn game_table_not_ok_p3_answer_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(24131 as isize, &game);
@@ -236,9 +236,9 @@ fn game_table_not_ok_p3_answer_tabs() {
 fn game_table_two_games_variant() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3",
+        entry_text: "Persona 3".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal")
+        variant: Some("Normal".to_string())
     };
 
     let element = game_table_wrapper(10965 as isize, &game);
@@ -252,18 +252,18 @@ fn extract_table_data_wrapper(shadow_page_id: isize, truth: HashMap<String, Vec<
     let document = page_html(&shadow_page_id).unwrap();
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3 FES",
+        entry_text: "Persona 3 FES".to_string(),
         tab_names: vec!["The Journey".to_string()],
-        variant: Some("Sub-boss")
+        variant: Some("Sub-boss".to_string())
     };
     let section = game_section(&document, &game).unwrap();
     let table = game_table(&section, &game).unwrap();
-    let data = extract_table_data(&table).unwrap();
+    let data = extract_table_data(&table, &game).unwrap();
 
-    assert_eq!(data.len(), truth.len());
-    assert!(truth.keys().all(|k| data.contains_key(k)));
+    assert_eq!(data.resistances.len(), truth.len());
+    assert!(truth.keys().all(|k| data.resistances.contains_key(k)));
     assert!(truth.keys().all(|k| {
-        truth.get(k).unwrap().len() == truth.get(k).unwrap().iter().zip(data.get(k).unwrap()).filter(|&(a, b)| a == b).count()
+        truth.get(k).unwrap().len() == truth.get(k).unwrap().iter().zip(data.resistances.get(k).unwrap()).filter(|&(a, b)| a == b).count()
     }));
 }
 
