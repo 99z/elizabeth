@@ -1,6 +1,5 @@
-use std::collections::HashMap;
 use colored::*;
-use crate::wikia::{Game, PersonaTitle, ShadowInfo, Shadow};
+use crate::wikia::{Game, PersonaTitle, Shadow};
 
 pub fn determine_game(game: &str) -> Game {
     match game.to_lowercase().as_str() {
@@ -16,7 +15,7 @@ pub fn determine_game(game: &str) -> Game {
             tab_names: vec!["The Answer".to_string()],
             variant: None
         },
-        "4g" => Game {
+        "4" | "4g" => Game {
             entry: PersonaTitle::P4G,
             entry_text: "Persona 4".to_string(),
             tab_names: vec!["Golden".to_string()],

@@ -148,20 +148,13 @@ pub fn arcana_sections(game: &Game) -> anyhow::Result<Vec<Shadow>> {
                 game: game.entry_text.clone()
             };
             eprintln!("{}", no_shadow_err);
-
             continue;
         }
 
         let subsection = match game_section(&page_html, &game, shadow_name.clone()) {
             Ok(s) => s,
             Err(e) => {
-                let no_var_err = errors::NoVariantError {
-                    shadow_name: shadow_name.clone(),
-                    game: game.entry_text.clone(),
-                    variant: game.tab_names.clone()
-                };
-                eprintln!("{}", no_var_err);
-
+                eprintln!("{}", e);
                 continue;
             }
         };
@@ -169,13 +162,7 @@ pub fn arcana_sections(game: &Game) -> anyhow::Result<Vec<Shadow>> {
         let table_nodes = match game_table(&subsection) {
             Ok(t) => t,
             Err(e) => {
-                let no_var_err = errors::NoVariantError {
-                    shadow_name: shadow_name.clone(),
-                    game: game.entry_text.clone(),
-                    variant: game.tab_names.clone()
-                };
-                eprintln!("{}", no_var_err);
-
+                eprintln!("{}", e);
                 continue;
             }
         };
@@ -292,7 +279,7 @@ pub fn game_table(doc: &Html) -> anyhow::Result<Vec<(Html, String)>> {
         tabs = Selector::parse(".tabbertab").unwrap();
     }
 
-    if (doc.select(&tabs).count() < 1) {
+    if doc.select(&tabs).count() < 1 {
         let variant = "Default".to_string();
         let tab_selector = Selector::parse("table:nth-child(1) > tbody > tr > td > table:nth-child(1) > tbody > tr > td > table:nth-child(2)").unwrap();
         let table_node = doc.select(&tab_selector);
