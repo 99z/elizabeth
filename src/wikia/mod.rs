@@ -36,14 +36,15 @@ pub struct Game {
 pub enum PersonaTitle {
     P3J,
     P3A,
-    P4,
     P4G
 }
 
 #[derive(Serialize, Debug)]
 pub struct ShadowInfo {
     pub game: String,
+    #[serde(skip_serializing)]
     pub version: String,
+    pub variant: String,
     pub resistances: HashMap<String, Vec<String>>
 }
 
@@ -53,8 +54,8 @@ pub struct Shadow {
     pub info: Vec<ShadowInfo>
 }
 
-const P3_SELECTOR: &str = "[id^=Persona_3]";
-const P4_SELECTOR: &str = "[id^=Persona_4]";
+const P3_SELECTOR: &str = "#Stats-collapsible-section > [id*=_3]";
+const P4_SELECTOR: &str = "#Stats-collapsible-section > [id*=_4]";
 
 const P3_ALL_SHADOWS: isize = 2807;
 const P4_ALL_SHADOWS: isize = 12686;
@@ -119,20 +120,6 @@ pub fn appears_in(page: &Html, entry: &Game) -> anyhow::Result<bool> {
     Ok(false)
 }
 
-fn get_other_version(entry: &PersonaTitle) -> Game {
-    if entry == &PersonaTitle::P3J {
-        utils::determine_game("3a")
-    } else if entry == &PersonaTitle::P3A {
-        utils::determine_game("3j")
-    } else if entry == &PersonaTitle::P4 {
-        utils::determine_game("4g")
-    } else if entry == &PersonaTitle::P4G {
-        utils::determine_game("4")
-    } else {
-        utils::determine_game("default")
-    }
-}
-
 pub fn arcana_sections(game: &Game) -> anyhow::Result<Vec<Shadow>> {
     let table_selector = Selector::parse(".table > tbody > tr td:nth-child(1)").unwrap();
     let page_id = if game.entry == PersonaTitle::P3J || game.entry == PersonaTitle::P3A {
@@ -141,9 +128,6 @@ pub fn arcana_sections(game: &Game) -> anyhow::Result<Vec<Shadow>> {
         P4_ALL_SHADOWS
     };
     let page = page_html(&page_id)?;
-
-    let other_game = get_other_version(&game.entry);
-    let mut games = vec![game.clone(), other_game];
 
     let mut all_shadows: Vec<Shadow> = vec![];
 
@@ -157,47 +141,47 @@ pub fn arcana_sections(game: &Game) -> anyhow::Result<Vec<Shadow>> {
             info: vec![]
         };
 
-        for g in &mut games {
-            let appears_in = appears_in(&page_html, g)?;
-            if !appears_in {
-                let no_shadow_err = errors::NoShadowError {
-                    name: shadow_name.clone(),
-                    game: game.entry_text.clone()
+        let appears_in = appears_in(&page_html, &game)?;
+        if !appears_in {
+            let no_shadow_err = errors::NoShadowError {
+                name: shadow_name.clone(),
+                game: game.entry_text.clone()
+            };
+            eprintln!("{}", no_shadow_err);
+
+            continue;
+        }
+
+        let subsection = match game_section(&page_html, &game, shadow_name.clone()) {
+            Ok(s) => s,
+            Err(e) => {
+                let no_var_err = errors::NoVariantError {
+                    shadow_name: shadow_name.clone(),
+                    game: game.entry_text.clone(),
+                    variant: game.tab_names.clone()
                 };
-                eprintln!("{}", no_shadow_err);
+                eprintln!("{}", no_var_err);
 
                 continue;
             }
+        };
 
-            let subsection = match game_section(&page_html, g, shadow_name.clone()) {
-                Ok(s) => s,
-                Err(e) => {
-                    let no_var_err = errors::NoVariantError {
-                        shadow_name: shadow_name.clone(),
-                        game: game.entry_text.clone(),
-                        variant: game.tab_names.clone()
-                    };
-                    eprintln!("{}", no_var_err);
+        let table_nodes = match game_table(&subsection) {
+            Ok(t) => t,
+            Err(e) => {
+                let no_var_err = errors::NoVariantError {
+                    shadow_name: shadow_name.clone(),
+                    game: game.entry_text.clone(),
+                    variant: game.tab_names.clone()
+                };
+                eprintln!("{}", no_var_err);
 
-                    continue;
-                }
-            };
+                continue;
+            }
+        };
 
-            let table_node = match game_table(&subsection, g, shadow_name.clone()) {
-                Ok(t) => t,
-                Err(e) => {
-                    let no_var_err = errors::NoVariantError {
-                        shadow_name: shadow_name.clone(),
-                        game: game.entry_text.clone(),
-                        variant: game.tab_names.clone()
-                    };
-                    eprintln!("{}", no_var_err);
-
-                    continue;
-                }
-            };
-
-            current_shadow.info.push(extract_table_data(&table_node, g)?);
+        for (table, variant) in table_nodes {
+            current_shadow.info.push(extract_table_data(&table, &variant, &game)?);
         }
 
         all_shadows.push(current_shadow);
@@ -214,7 +198,7 @@ pub fn game_section(page: &Html, game: &Game, shadow_name: String) -> anyhow::Re
         P4_SELECTOR
     };
 
-    let mut base_selector = Selector::parse(format!("{} + .tabber", persona_selector).as_str()).unwrap();
+    let mut base_selector = Selector::parse(format!("{} + .tabber > .tabbertab", persona_selector).as_str()).unwrap();
 
     // TODO there's gotta be a better way to do this
     let selector = match page.select(&base_selector).count() {
@@ -249,11 +233,21 @@ pub fn game_section(page: &Html, game: &Game, shadow_name: String) -> anyhow::Re
                                     ).unwrap();
 
                                     match page.select(&base_selector).count() {
-                                        0 => return Err(NoVariantError {
-                                            shadow_name,
-                                            game: game.entry_text.clone(),
-                                            variant: game.tab_names.clone()
-                                        }.into()),
+                                        0 => {
+                                            // case when table exists, no tabs or identifiers
+                                            base_selector = Selector::parse(
+                                                "#Stats-collapsible-section > table:nth-child(1)"
+                                            ).unwrap();
+
+                                            match page.select(&base_selector).count() {
+                                                0 => return Err(NoVariantError {
+                                                    shadow_name,
+                                                    game: game.entry_text.clone(),
+                                                    variant: game.tab_names.clone()
+                                                }.into()),
+                                                _ => base_selector
+                                            }
+                                        }
                                         _ => base_selector
                                     }
                                 },
@@ -285,56 +279,43 @@ pub fn game_section(page: &Html, game: &Game, shadow_name: String) -> anyhow::Re
     Ok(subsection)
 }
 
-pub fn game_table(doc: &Html, game: &Game, shadow_name: String) -> anyhow::Result<Html> {
+pub fn game_table(doc: &Html) -> anyhow::Result<Vec<(Html, String)>> {
     // this silliness is required because, sometimes, RARELY, there's nested tabs
     // even within a game's section
     // https://megamitensei.fandom.com/wiki/Green_Sigil#Persona%203
     let mut tabs = Selector::parse(".tabbertab > .tabber > .tabbertab").unwrap();
+
+    let mut results = vec![];
 
     // if the nested tabs don't exist, set selector properly
     if doc.select(&tabs).count() < 1 {
         tabs = Selector::parse(".tabbertab").unwrap();
     }
 
-    let tab_selector = match doc
-        .select(&tabs)
-        .position(|t| t.value().attr("title").unwrap().contains( match &game.variant {
-            Some(v) => v.as_str(),
-            None => "Normal Encounter"
-        })
-        ) {
-        Some(idx) => gen_table_selector(&idx),
-        None => {
-            match doc
-                .select(&tabs)
-                .position(|t| game.tab_names.contains(&t.value().attr("title").unwrap().to_string())
-                ) {
-                Some(idx) => gen_table_selector(&idx),
-                None => {
-                    // tabs exist but none matched variant + game
-                    if doc.select(&tabs).count() >= 1 {
-                        return Err(NoVariantError {
-                            shadow_name,
-                            game: game.entry_text.clone(),
-                            variant: game.tab_names.clone()
-                        }.into())
-                    }
+    if (doc.select(&tabs).count() < 1) {
+        let variant = "Default".to_string();
+        let tab_selector = Selector::parse("table:nth-child(1) > tbody > tr > td > table:nth-child(1) > tbody > tr > td > table:nth-child(2)").unwrap();
+        let table_node = doc.select(&tab_selector);
+        let resistance_table = Html::parse_fragment(table_node.map(|n| n.html())
+            .collect::<String>().as_str());
 
-                    // no tabs exist, default selector
-                    Selector::parse("table > tbody > tr > td > table:nth-child(1) >\
-                    tbody > tr > td > table:nth-child(2)").unwrap()
-                }
-            }
+        results.push((resistance_table, variant));
+    } else {
+        for (idx, elem) in doc.select(&tabs).enumerate() {
+            let variant = elem.value().attr("title").unwrap().to_string();
+            let tab_selector = gen_table_selector(&idx);
+            let table_node = doc.select(&tab_selector);
+            let resistance_table = Html::parse_fragment(table_node.map(|n| n.html())
+                .collect::<String>().as_str());
+
+            results.push((resistance_table, variant));
         }
-    };
+    }
 
-    let table_node = doc.select(&tab_selector);
-    let resistance_table = Html::parse_fragment(table_node.map(|n| n.html())
-        .collect::<String>().as_str());
-    Ok(resistance_table)
+    Ok(results)
 }
 
-pub fn extract_table_data(table_doc: &Html, game: &Game) -> anyhow::Result<ShadowInfo> {
+pub fn extract_table_data(table_doc: &Html, variant: &String, game: &Game) -> anyhow::Result<ShadowInfo> {
     let types = Selector::parse("tbody > tr:nth-child(1) > th").unwrap();
     let types_table: Vec<String> = table_doc.select(&types)
         .map(|t| t.inner_html().trim().to_string()).collect();
@@ -344,6 +325,7 @@ pub fn extract_table_data(table_doc: &Html, game: &Game) -> anyhow::Result<Shado
     let mut shadow_info = ShadowInfo {
         game: game.entry_text.clone(),
         version: game.tab_names[0].clone(),
+        variant: variant.clone(),
         resistances: HashMap::new(),
     };
 

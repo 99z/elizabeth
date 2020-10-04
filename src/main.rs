@@ -75,9 +75,11 @@ fn main() -> anyhow::Result<()> {
 
         let subsection = wikia::game_section(&page, &game, shadow.name.clone())?;
 
-        let table_node = wikia::game_table(&subsection, &game, shadow.name.clone())?;
+        let table_nodes = wikia::game_table(&subsection)?;
 
-        shadow.info.push(wikia::extract_table_data(&table_node, &game)?);
+        for (table, variant) in table_nodes {
+            shadow.info.push(wikia::extract_table_data(&table, &variant, &game)?);
+        }
 
         utils::print_resistances(&shadow);
     }
