@@ -49,7 +49,7 @@ fn game_section_wrapper(shadow_page_id: isize, expected_tabs: u8, game: &Game, s
     let tabs = section.unwrap().tree.nodes().map(|n| {
         match n.value().as_element() {
             Some(e) => {
-                if e.attr("class").is_some() && e.attr("class").unwrap() == "tabber" {
+                if e.attr("class").is_some() && e.attr("class").unwrap() == "tabbertab" {
                     return true;
                 }
 
@@ -72,12 +72,12 @@ fn game_section_wrapper(shadow_page_id: isize, expected_tabs: u8, game: &Game, s
 fn game_section_ok_with_tabs() {
     let game = Game {
         entry: PersonaTitle::P3J,
-        entry_text: "Persona 3 FES".to_string(),
-        tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal Encounter".to_string())
+        entry_text: "Persona 3".to_string(),
+        tab_names: vec!["The Journey".to_string(), "Persona 3".to_string()],
+        variant: Some("Normal".to_string())
     };
 
-    game_section_wrapper(10968 as isize, 1, &game, "Intrepid Knight".to_string());
+    game_section_wrapper(10968 as isize, 2, &game, "Intrepid Knight".to_string());
 }
 
 #[test]
@@ -126,7 +126,8 @@ fn game_section_double_heading_no_tabs() {
 fn game_table_wrapper(shadow_page_id: isize, game: &Game, shadow_name: String) -> anyhow::Result<Element> {
     let document = page_html(&shadow_page_id)?;
     let section = game_section(&document, &game, shadow_name.clone())?;
-    let table = game_table(&section, &game, shadow_name.clone())?;
+    let table_nodes = game_table(&section)?;
+    let (table, _variant) = table_nodes.first().unwrap();
 
     let third = match table.tree.nodes().nth(3) {
         Some(n) => n,
@@ -223,19 +224,6 @@ fn game_table_ok_p3_answer_tabs() {
 }
 
 #[test]
-fn game_table_not_ok_p3_answer_tabs() {
-    let game = Game {
-        entry: PersonaTitle::P3J,
-        entry_text: "Persona 3".to_string(),
-        tab_names: vec!["The Journey".to_string()],
-        variant: Some("Normal".to_string())
-    };
-
-    let element = game_table_wrapper(24131 as isize, &game, "Laughing Table".to_string());
-    assert!(element.is_err());
-}
-
-#[test]
 fn game_table_two_games_variant() {
     let game = Game {
         entry: PersonaTitle::P3J,
@@ -259,14 +247,19 @@ fn extract_table_data_wrapper(shadow_page_id: isize, truth: HashMap<String, Vec<
         tab_names: vec!["The Journey".to_string()],
         variant: Some("Sub-boss".to_string())
     };
-    let section = game_section(&document, &game, shadow_name.clone()).unwrap();
-    let table = game_table(&section, &game, shadow_name.clone()).unwrap();
-    let data = extract_table_data(&table, &game).unwrap();
 
-    assert_eq!(data.resistances.len(), truth.len());
-    assert!(truth.keys().all(|k| data.resistances.contains_key(k)));
+    let mut shadow_info = vec![];
+    let section = game_section(&document, &game, shadow_name.clone()).unwrap();
+    let table_nodes = game_table(&section).unwrap();
+    for (table, variant) in table_nodes {
+        shadow_info.push(extract_table_data(&table, &variant, &game).unwrap());
+    }
+
+    let boss_table = shadow_info.first().unwrap();
+    assert_eq!(boss_table.resistances.len(), truth.len());
+    assert!(truth.keys().all(|k| boss_table.resistances.contains_key(k)));
     assert!(truth.keys().all(|k| {
-        truth.get(k).unwrap().len() == truth.get(k).unwrap().iter().zip(data.resistances.get(k).unwrap()).filter(|&(a, b)| a == b).count()
+        truth.get(k).unwrap().len() == truth.get(k).unwrap().iter().zip(boss_table.resistances.get(k).unwrap()).filter(|&(a, b)| a == b).count()
     }));
 }
 
