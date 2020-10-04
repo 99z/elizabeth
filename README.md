@@ -2,22 +2,34 @@
 
 
 ```shell script
-Usage: target/debug/liz -s <shadow> -p <persona> [-v <variant>]
+Usage: liz [-s <shadow>] -p <persona> [-a]
 
 Find shadow resistance/weakness information
 
 Options:
   -s, --shadow      name of shadow
-  -p, --persona     persona series number. One of: 3, 3a, 4, 4g
-  -v, --variant     shadow variant. Defaults to 'normal', can be 'normal' or
-                    'sub'
+  -p, --persona     persona series number. One of: 3, 4
+  -a, --all         get all shadow resistance info for specified game. Defaults
+                    to false
   --help            display usage information
+
 ```
 ```shell script
-$ liz -p 3 -s 'haughty maya'
-WEAK: Wind
-NEUTRAL: Slash Strike Pierce Fire Ice Light Dark Almighty
-STRONG: Elec
+$ liz -p 3 -s 'magical magus'
+Magical Magus
+
+Sub-boss
+STRONG: Slash Strike Pierce 
+DRAIN: Ice
+NEUTRAL: Elec Wind Almi 
+WEAK: Fire 
+NULL: Light Dark 
+
+Normal enemy
+NEUTRAL: Slash Strike Pierce Elec Wind Light Dark Almi 
+WEAK: Fire 
+NULL: Ice 
+
 ```
 
 ## todo
