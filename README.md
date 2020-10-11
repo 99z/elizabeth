@@ -32,11 +32,11 @@ NULL: Ice
 
 ```
 
-## todo
-- [ ] test against all 3/4/5 shadow pages, including variants
-- [ ] scrape tables for p3/4/5 and output complete shadow info to JSON
-- [ ] Elizabeth's requests lookup
-- [ ] P4 quests lookup
+Dump all shadow weakness/resistance info for a game:
+
+```shell script
+$ liz -p 3 -a > p3_shadows.json
+```
 
 ## contributing
 just use it and open an issue with the shadow name if the info it spits out is bogus vs. the wiki.
